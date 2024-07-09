@@ -1,6 +1,6 @@
 import express, { Router } from "express";
 import database_connection from "@voyager/database";
-import { BlockSqlTableType, PageSizeArray, transformObjectToSqlInsert, type Block } from "@voyager/common";
+import { BlockSqlTableType, transformObjectToSqlInsert, type Block, pageSizeOptions } from "@voyager/common";
 import z from "zod";
 
 import { RpcProvider } from "starknet";
@@ -13,18 +13,18 @@ const RPC_NODE_URL = process.env.RPC_NODE_URL
 
 const provider = new RpcProvider({ nodeUrl: RPC_NODE_URL })
 
-const blockParamsSchema = z.object({
+const transactionParamsSchema = z.object({
   block_number: z.number(),
 })
 
-const blockHashParamsSchema = z.object({
+const transactionHashParamsSchema = z.object({
   block_hash: z.string(),
 })
 
 
-const blocksParamsSchema = z.object({
-  p: z.string().default('0'),
-  ps: z.enum(['1', ...PageSizeArray]).default('10')
+const transactionsParamsSchema = z.object({
+  p: z.number().default(1),
+  ps: pageSizeOptions.default(10)
 })
 
 const router: Router = express.Router();
@@ -54,7 +54,7 @@ const runSingleQuery = (sql: string) => {
 };
 
 router.get("/blocks", async (req, res, next) => {
-  const schemaRes = blocksParamsSchema.safeParse({ p: req.query.p, ps: req.query.ps })
+  const schemaRes = transactionsParamsSchema.safeParse({ p: Number(req.query.p), ps: Number(req.query.ps) })
 
   if (!schemaRes.success) {
     res.status(400).json(schemaRes.error)
@@ -63,8 +63,8 @@ router.get("/blocks", async (req, res, next) => {
 
   const { ps, p } = schemaRes.data
 
-  const page = parseInt(p);
-  const pageSize = parseInt(ps);
+  const page = p - 1;
+  const pageSize = ps;
 
   if (isNaN(page) || isNaN(pageSize)) {
     res.status(400).json({ error: "failed to parse pageSize or page" })
@@ -88,7 +88,7 @@ router.get("/blocks", async (req, res, next) => {
     }
     let countResult_: any = countResult
     const totalBlocks = countResult_.total;
-    const totalPages = Math.ceil(totalBlocks / pageSize) - 1;
+    const totalPages = Math.ceil(totalBlocks / pageSize);
 
     res.status(200).json({
       blocks: rows,
@@ -139,7 +139,7 @@ async function getMissingBlock(block_number: number) {
 router.get("/block/:block_number", async (req, res, next) => {
   const block_number = req.params.block_number;
 
-  const schemaRes = blockParamsSchema.safeParse({ block_number: parseInt(block_number) })
+  const schemaRes = transactionParamsSchema.safeParse({ block_number: parseInt(block_number) })
 
   if (!schemaRes.success) {
     res.status(400).json(schemaRes.error)
@@ -186,14 +186,14 @@ router.get("/block/:block_number", async (req, res, next) => {
 router.get("/block_hash/:block_hash", async (req, res, next) => {
   const block_hash = req.params.block_hash;
 
-  const schemaRes = blockHashParamsSchema.safeParse({ block_hash: block_hash })
+  const schemaRes = transactionHashParamsSchema.safeParse({ block_hash: block_hash })
 
   if (!schemaRes.success) {
     res.status(400).json(schemaRes.error)
     return
   }
 
-  const query = `SELECT * FROM blocks WHERE block_hash = ${schemaRes.data.block_hash}`
+  const query = `SELECT * FROM blocks WHERE block_hash = '${schemaRes.data.block_hash}' ORDER BY block_number`
 
   database_connection.get(query, undefined, (err, row: Block) => {
     if (err != null) {

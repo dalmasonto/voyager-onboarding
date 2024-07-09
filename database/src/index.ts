@@ -22,6 +22,7 @@ const blockTableCreationQuery = `
  
 const transactionTableCreationQuery = `
 	CREATE TABLE IF NOT EXISTS transactions (
+		block_number INT,
 		transaction_hash VARCHAR(66) PRIMARY KEY,  
 		type TEXT,
         version VARCHAR(10),

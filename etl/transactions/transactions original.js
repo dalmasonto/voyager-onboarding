@@ -12,7 +12,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_START = void 0;
 const starknet_1 = require("starknet");
 const database_1 = __importDefault(require("@voyager/database"));
 const common_1 = require("@voyager/common");
@@ -20,15 +19,15 @@ const dotenv_1 = require("dotenv");
 (0, dotenv_1.config)();
 const RPC_NODE_URL = process.env.RPC_NODE_URL;
 const provider = new starknet_1.RpcProvider({ nodeUrl: RPC_NODE_URL });
-const CHUNK_SIZE = 100;
-const syncTransactionsForBlock = (blockNumber) => __awaiter(void 0, void 0, void 0, function* () {
+console.log(provider);
+const syncBlockRange = (start, end) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e;
-    try {
-        const latestBlockDetails = yield provider.getBlockWithTxs(blockNumber);
-        console.log("Syncing transactions for block: ", blockNumber);
+    for (let current_block = end; current_block > start && current_block <= end; current_block--) {
+        console.log(`Syncing block: ${current_block}`);
+        const latestBlockDetails = yield provider.getBlockWithTxs(current_block);
         for (let i = 0; i < latestBlockDetails.transactions.length; i++) {
-            const tx = latestBlockDetails.transactions[i];
-            const insertSqlTransaction = {
+            let tx = latestBlockDetails.transactions[i];
+            const insertSqlBlock = {
                 transaction_hash: tx.transaction_hash,
                 type: tx.type,
                 version: tx.version,
@@ -43,53 +42,55 @@ const syncTransactionsForBlock = (blockNumber) => __awaiter(void 0, void 0, void
                 nonce_data_availability_mode: tx.nonce_data_availability_mode,
                 fee_data_availability_mode: tx.fee_data_availability_mode,
                 max_fee: tx.max_fee,
-                block_number: blockNumber,
+                block_number: current_block,
             };
-            const { columns, values } = (0, common_1.transformObjectToSqlInsert)(insertSqlTransaction);
-            yield database_1.default.run(`INSERT INTO transactions (${columns}) VALUES(${values})`, undefined);
-            console.log(`Successfully inserted transaction: ${tx.transaction_hash}`);
+            const { columns, values } = (0, common_1.transformObjectToSqlInsert)(insertSqlBlock);
+            database_1.default.run(`INSERT INTO transactions (${columns}) VALUES(${values})`, undefined, (err) => {
+                if (err)
+                    console.error("failed to insert data", err);
+            });
         }
     }
-    catch (error) {
-        console.error(`Error syncing transactions for block ${blockNumber}:`, error);
-    }
 });
-const syncTransactionRange = (start, end) => __awaiter(void 0, void 0, void 0, function* () {
-    if (start > end)
+const CHUNK_SIZE = 10;
+const chunking = (start, end) => __awaiter(void 0, void 0, void 0, function* () {
+    const tasks = [];
+    console.log(start, end);
+    if (start >= end)
         return;
-    try {
-        yield syncTransactionsForBlock(start);
-        yield syncTransactionRange(start + 1, end);
+    console.log("Start Chunking");
+    let task_index = end;
+    if (end - start > CHUNK_SIZE) {
+        for (; task_index > start; task_index -= CHUNK_SIZE) {
+            tasks.push(syncBlockRange(task_index - CHUNK_SIZE, task_index));
+        }
     }
-    catch (error) {
-        console.error(`Error syncing transaction range (${start}, ${end}):`, error);
+    if (task_index <= 0) {
+        // "PROCESS REST RANGE", 0, CHUNK_SIZE + task_index
+        tasks.push(syncBlockRange(0, task_index + CHUNK_SIZE));
     }
-});
-const runTransactions = (...args_1) => __awaiter(void 0, [...args_1], void 0, function* (startBlock = 0) {
-    try {
-        const latestBlockNumber = yield provider.getBlockNumber();
-        console.log("Latest onchain block", latestBlockNumber);
-        const MAXIMUM_SELECTOR = 'MAX(block_number)';
-        const query = `SELECT ${MAXIMUM_SELECTOR} FROM transactions`;
-        const row = yield new Promise((resolve, reject) => {
-            database_1.default.get(query, undefined, (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(row);
-                }
-            });
-        });
-        const latestSyncedBlock = row[MAXIMUM_SELECTOR];
-        console.log("Sync transactions from-to", `(${latestSyncedBlock !== null && latestSyncedBlock !== void 0 ? latestSyncedBlock : startBlock}, ${latestBlockNumber})`);
-        yield syncTransactionRange(latestSyncedBlock ? latestSyncedBlock + 1 : startBlock, latestBlockNumber);
+    if (end - start <= CHUNK_SIZE) {
+        tasks.push(syncBlockRange(start, end));
     }
-    catch (error) {
-        console.error("Error in runTransactions:", error);
-    }
+    console.log(tasks.length, task_index);
+    yield Promise.all(tasks);
+    console.log("Finished all processes");
 });
 // Setting default start in case of no db it will sync block upto default block.
 // Make it 0 if want to sync all blocks
-exports.DEFAULT_START = 79540;
+const DEFAULT_START = 70000;
+const runTransactions = () => __awaiter(void 0, void 0, void 0, function* () {
+    const latestBlockNumber = yield provider.getBlockNumber();
+    console.log("Latest onchain block", latestBlockNumber);
+    const MAXIMUM_SELECTOR = 'MAX(block_number)';
+    const query = `SELECT ${MAXIMUM_SELECTOR} FROM blocks`;
+    database_1.default.get(query, undefined, (err, row) => {
+        if (err)
+            console.log(err);
+        const latestSyncedBlock = row[MAXIMUM_SELECTOR];
+        console.log("Sync blocks from-to", `(${latestSyncedBlock}, ${latestBlockNumber})`);
+        chunking(latestSyncedBlock !== null && latestSyncedBlock !== void 0 ? latestSyncedBlock : DEFAULT_START, latestBlockNumber);
+    });
+});
+// runTransactions()
 exports.default = runTransactions;

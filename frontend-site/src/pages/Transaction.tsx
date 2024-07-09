@@ -1,5 +1,5 @@
 import React from "react";
-import { Spinner, Stack, Table, TableCaption, TableContainer, Tbody, Td, Text, Th, Thead, Tr } from "@chakra-ui/react";
+import { Heading, Spinner, Stack, Table, TableCaption, TableContainer, Tbody, Td, Text, Th, Thead, Tr } from "@chakra-ui/react";
 import API from "../utils/API";
 import { useParams } from "react-router-dom";
 import { IDataItem } from "../utils/types";
@@ -11,7 +11,7 @@ const DataItem = ({ label, value }: IDataItem) => {
 
   const getRenderValue = () => {
     if (label === 'timestamp') {
-      return convertTsToReadableTime(value.toString())
+      return convertTsToReadableTime(value.toString()).replace(/, /g, "")
     }
     else if (label === 'signature' || label === 'calldata' || label === 'paymaster_data' || label === 'resource_bounds' || label === 'account_deployment_data') {
       return value === '[]' ? '-' : JSON.stringify(JSON.parse(value.toString()), null, 4)
@@ -64,12 +64,13 @@ const Transaction: React.FC = () => {
             ? <Spinner />
             : error
               ? <Stack>
-                <Text color={"red"}>{error?.status}</Text>
-                <Text color={"red"}>{error?.message}</Text>
+                <Text color={"red"} textAlign={'center'}>{error?.status}</Text>
+                <Text color={"red"} textAlign={'center'}>{error?.message}</Text>
               </Stack>
               : <Stack >
-                <Text>transaction {tx_hash}</Text>
-                <TableContainer>
+                <Heading textAlign={'center'} as={'h1'}>Transaction</Heading>
+                <Text textAlign={'center'}>{tx_hash}</Text>
+                <TableContainer alignSelf={'center'}>
                   <Table
                     variant='simple'
                     border="1px solid"

@@ -14,7 +14,7 @@ const Navbar = () => {
         w={'100%'}
       >
         <Box>
-          <Image src="/Voyager_Logo_Pack/Voyager_Horizontal/Voyager-Horizontal-Dark-Strapline.svg" maxH={'45px'} />
+          <Image src="/Voyager-Horizontal-Dark-Strapline.svg" maxH={'45px'} />
         </Box>
         <Box>
           <Flex

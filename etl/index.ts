@@ -1,5 +1,5 @@
-import runBlocks from "./blocks/blocks";
-import runTransactions from "./transactions/transactions";
+import runBlocks, {DEFAULT_START} from "./blocks/blocks";
+import runTransactions, {DEFAULT_START as Transaction_Start_Bloc} from "./transactions/transactions";
 
 
 // runBlocks()
@@ -7,9 +7,9 @@ import runTransactions from "./transactions/transactions";
 async function runProcesses() {
     try {
         console.log('Starting processes...');
-        await runBlocks();
+        await runBlocks(DEFAULT_START);
         console.log('runBlocks finished.');
-        await runTransactions();
+        await runTransactions(Transaction_Start_Bloc);
         console.log('runTransactions finished.');
         console.log('Waiting 1 minute to rerun...');
         setTimeout(runProcesses, 60000); // 1 minute = 60000 milliseconds

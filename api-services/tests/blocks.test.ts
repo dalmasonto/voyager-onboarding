@@ -47,11 +47,29 @@ describe('Result should have "block_number"', () => {
 
   it('should return 404', (done) => {
     request(server)
-      .get('/blocks/74317')
-      .expect(404)
+      .get('/block/79528')
+      .expect(200)
       .end((err, res) => {
         if (err) return done(err)
-        // expect(res.body).toHaveProperty('error');
+        expect(res.body).toHaveProperty('block_number');
+        done()
+      })
+  }, 20000);
+});
+
+
+describe('Result should have "Timestamp"', () => {
+  beforeAll(() => {
+    server = app;
+  });
+
+  it('should return 200', (done) => {
+    request(server)
+      .get('/block_hash/0x4d5176ef10a868b9ed5a2b02bddbf609f10ef79fd11cdaa1842ab1e9e475bc5')
+      .expect(200)
+      .end((err, res) => {
+        if (err) return done(err)
+        expect(res.body).toHaveProperty('timestamp');
         done()
       })
   }, 20000);

@@ -9,15 +9,13 @@ const RPC_NODE_URL = process.env.RPC_NODE_URL
 
 const provider = new RpcProvider({ nodeUrl: RPC_NODE_URL })
 
+const CHUNK_SIZE = 100;
 
 const syncBlockRange = async (start: number, end: number) => {
-	for (
-		let current_block = end;
-		current_block > start && current_block <= end;
-		current_block--
-	) {
-		console.log(`Syncing block: ${current_block}`)
-		const latestBlockDetails: any = await provider.getBlockWithTxs(current_block);
+	if (start > end) return;
+
+	try {
+		const latestBlockDetails: any = await provider.getBlockWithTxs(start);
 
 		const insertSqlBlock: BlockSqlTableType = {
 			status: latestBlockDetails.status,
@@ -37,58 +35,43 @@ const syncBlockRange = async (start: number, end: number) => {
 
 		const { columns, values } = transformObjectToSqlInsert(insertSqlBlock)
 
-		db.run(`INSERT INTO blocks (${columns}) VALUES(${values})`, undefined, (err) => {
-			if (err)
-				console.error("failed to insert data", err);
-		})
+		await db.run(`INSERT INTO blocks (${columns}) VALUES(${values})`, undefined);
+		console.log(`Successfully inserted block: ${start}`);
+
+		await syncBlockRange(start + 1, end);
+	} catch (error) {
+		console.error(`Error syncing block ${start}:`, error);
 	}
 }
 
-const CHUNK_SIZE = 100;
-const chunking = async (start: number, end: number) => {
-	const tasks: Promise<any>[] = []
-	console.log(start, end)
-	if (start >= end) return;
+const runBlocks = async (startBlock: number = 0) => {
+	try {
+		const latestBlockNumber = await provider.getBlockNumber()
+		console.log("Latest onchain block", latestBlockNumber)
 
-	console.log("Start Chunking")
+		const MAXIMUM_SELECTOR = 'MAX(block_number)';
 
-	let task_index = end;
-	if (end - start > CHUNK_SIZE) {
-		for (; task_index > start; task_index -= CHUNK_SIZE) {
-			tasks.push(syncBlockRange(task_index - CHUNK_SIZE, task_index))
-		}
-	}
-	if (task_index <= 0) {
-		// "PROCESS REST RANGE", 0, CHUNK_SIZE + task_index
-		tasks.push(syncBlockRange(0, task_index + CHUNK_SIZE))
-	}
-	if (end - start <= CHUNK_SIZE) {
-		tasks.push(syncBlockRange(start, end))
-	}
-	console.log(tasks.length, task_index)
-	await Promise.all(tasks)
-	console.log("Finished all processes")
-}
+		const query = `SELECT ${MAXIMUM_SELECTOR} FROM blocks`
+		const row: any = await new Promise((resolve, reject) => {
+			db.get(query, undefined, (err: any, row: any) => {
+				if (err) {
+					reject(err);
+				} else {
+					resolve(row);
+				}
+			});
+		});
 
-
-// Setting default start in case of no db it will sync block upto default block.
-// Make it 0 if want to sync all blocks
-const DEFAULT_START = 64500;
-const runBlocks = async () => {
-
-	const latestBlockNumber = await provider.getBlockNumber()
-	console.log("Latest onchain block", latestBlockNumber)
-
-	const MAXIMUM_SELECTOR = 'MAX(block_number)';
-
-	const query = `SELECT ${MAXIMUM_SELECTOR} FROM blocks`
-	db.get(query, undefined, (err: any, row: any) => {
-		if (err)
-			console.log(err)
 		const latestSyncedBlock = row[MAXIMUM_SELECTOR]
-		console.log("Sync blocks from-to", `(${latestSyncedBlock}, ${latestBlockNumber})`)
-		chunking(latestSyncedBlock ?? DEFAULT_START, latestBlockNumber);
-	})
+		console.log("Sync blocks from-to", `(${latestSyncedBlock ?? startBlock}, ${latestBlockNumber})`);
+
+		await syncBlockRange(latestSyncedBlock ? latestSyncedBlock + 1 : startBlock, latestBlockNumber);
+	} catch (error) {
+		console.error("Error in runBlocks:", error);
+	}
 }
-// runBlocks()
+
+const DEFAULT_START = 79540;
+
+export { DEFAULT_START }
 export default runBlocks

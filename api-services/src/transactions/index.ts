@@ -1,6 +1,6 @@
 import express, { Router } from "express";
 import database_connection from "@voyager/database";
-import { PageSizeArray, Transaction, TransactionSqlTableType, transformObjectToSqlInsert } from "@voyager/common";
+import { pageSizeOptions, Transaction, TransactionSqlTableType, transformObjectToSqlInsert } from "@voyager/common";
 import z from "zod";
 
 import { RpcProvider } from "starknet";
@@ -18,8 +18,8 @@ const transactionHashParamsSchema = z.object({
 })
 
 const blocksParamsSchema = z.object({
-  p: z.string().default('0'),
-  ps: z.enum(['1', ...PageSizeArray]).default('10')
+  p: z.number().default(1),
+  ps: pageSizeOptions.default(10)
 })
 
 const router: Router = express.Router();
@@ -49,7 +49,7 @@ const runSingleQuery = (sql: string) => {
 };
 
 router.get("/transactions", async (req, res, next) => {
-  const schemaRes = blocksParamsSchema.safeParse({ p: req.query.p, ps: req.query.ps })
+  const schemaRes = blocksParamsSchema.safeParse({ p: Number(req.query.p), ps: Number(req.query.ps) })
 
   if (!schemaRes.success) {
     res.status(400).json(schemaRes.error)
@@ -58,8 +58,8 @@ router.get("/transactions", async (req, res, next) => {
 
   const { ps, p } = schemaRes.data
 
-  const page = parseInt(p);
-  const pageSize = parseInt(ps);
+  const page = p - 1;
+  const pageSize = ps;
 
   if (isNaN(page) || isNaN(pageSize)) {
     res.status(400).json({ error: "failed to parse pageSize or page" })
@@ -82,7 +82,7 @@ router.get("/transactions", async (req, res, next) => {
     }
     let countResult_: any = countResult
     const totalTransactions = countResult_.total;
-    const totalPages = Math.ceil(totalTransactions / pageSize) - 1;
+    const totalPages = Math.ceil(totalTransactions / pageSize);
 
     res.status(200).json({
       transactions: rows,
@@ -102,19 +102,20 @@ async function getMissingTransaction(hash: string) {
   console.log("Transaction: ", tx)
   const insertSqlBlock: TransactionSqlTableType = {
     transaction_hash: tx.transaction_hash,
-				type: tx.type,
-				version: tx.version,
-				nonce: tx.nonce,
-				sender_address: tx.sender_address,
-				signature: JSON.stringify(tx.signature ?? []),
-				calldata: JSON.stringify(tx.calldata ?? []),
-				resource_bounds: JSON.stringify(tx.resource_bounds ?? []),
-				tip: tx.tip,
-				paymaster_data: JSON.stringify(tx.paymaster_data ?? []),
-				account_deployment_data: JSON.stringify(tx.account_deployment_data ?? []),
-				nonce_data_availability_mode: tx.nonce_data_availability_mode,
-				fee_data_availability_mode: tx.fee_data_availability_mode,
-				max_fee: tx.max_fee
+    type: tx.type,
+    version: tx.version,
+    block_number: tx.block_number,
+    nonce: tx.nonce,
+    sender_address: tx.sender_address,
+    signature: JSON.stringify(tx.signature ?? []),
+    calldata: JSON.stringify(tx.calldata ?? []),
+    resource_bounds: JSON.stringify(tx.resource_bounds ?? []),
+    tip: tx.tip,
+    paymaster_data: JSON.stringify(tx.paymaster_data ?? []),
+    account_deployment_data: JSON.stringify(tx.account_deployment_data ?? []),
+    nonce_data_availability_mode: tx.nonce_data_availability_mode,
+    fee_data_availability_mode: tx.fee_data_availability_mode,
+    max_fee: tx.max_fee
   };
 
   const { columns, values } = transformObjectToSqlInsert(insertSqlBlock);
