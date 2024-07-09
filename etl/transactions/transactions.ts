@@ -9,12 +9,10 @@ const RPC_NODE_URL = process.env.RPC_NODE_URL
 
 const provider = new RpcProvider({ nodeUrl: RPC_NODE_URL })
 
-const CHUNK_SIZE = 100;
-
 const syncTransactionsForBlock = async (blockNumber: number) => {
   try {
     const latestBlockDetails: any = await provider.getBlockWithTxs(blockNumber);
-	console.log("Syncing transactions for block: ", blockNumber)
+    console.log("Syncing transactions for block: ", blockNumber)
 
     for (let i = 0; i < latestBlockDetails.transactions.length; i++) {
       const tx = latestBlockDetails.transactions[i];
@@ -84,8 +82,6 @@ const runTransactions = async (startBlock: number = 0) => {
   }
 }
 
-// Setting default start in case of no db it will sync block upto default block.
-// Make it 0 if want to sync all blocks
 export const DEFAULT_START = 79540;
 
 export default runTransactions

@@ -9,8 +9,6 @@ const RPC_NODE_URL = process.env.RPC_NODE_URL
 
 const provider = new RpcProvider({ nodeUrl: RPC_NODE_URL })
 
-const CHUNK_SIZE = 100;
-
 const syncBlockRange = async (start: number, end: number) => {
 	if (start > end) return;
 
